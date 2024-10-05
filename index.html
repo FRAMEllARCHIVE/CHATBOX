@@ -17,54 +17,80 @@
 
   <script src="https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js"></script>
   <script>
-    const staticPeerID = "static-chatroom-peer";  // Set Peer ID that new users attempt to connect to
-    let peer = new Peer();  // Create a new peer with a random ID initially
+    const staticPeerID = "static-chatroom-peer";
+    let peer = new Peer(); // Create a new peer with a random ID initially
     let connections = [];
     const messagesDiv = document.getElementById('messages');
     const messageInput = document.getElementById('messageInput');
 
-    // Function to display messages
     function displayMessage(msg) {
       const messageElement = document.createElement('div');
       messageElement.textContent = msg;
       messagesDiv.appendChild(messageElement);
     }
 
-    // Attempt to connect to the set peer ID
+    // Attempt to connect to the static peer ID
     function attemptConnectionToStaticID() {
+      console.log(`Attempting to connect to static peer ID: ${staticPeerID}`);
       const conn = peer.connect(staticPeerID);
+
       conn.on('open', () => {
+        console.log(`Successfully connected to static peer ID: ${staticPeerID}`);
         displayMessage("Connected to static peer ID.");
         connections.push(conn);
         setupConnection(conn);
       });
 
-      conn.on('error', () => {
-        // If connection fails, inherit the static peer ID
+      conn.on('error', (err) => {
+        console.error(`Failed to connect to static peer ID: ${staticPeerID}. Error:`, err);
         inheritStaticPeerID();
       });
     }
 
-    // If connection to the static peer ID fails, inherit it
+    // Inherit the static peer ID if the connection fails
     function inheritStaticPeerID() {
-      peer = new Peer(staticPeerID);  // Assume the static peer ID
-      displayMessage(`You are now the owner of static peer ID: ${staticPeerID}`);
+      try {
+        console.log(`Attempting to inherit static peer ID: ${staticPeerID}`);
+        peer = new Peer(staticPeerID); // Try to claim the static peer ID
 
-      // Handle incoming connections as the new "static peer"
-      peer.on('connection', (conn) => {
-        displayMessage("New peer connected to you.");
-        connections.push(conn);
-        setupConnection(conn);
-      });
+        peer.on('open', () => {
+          console.log(`You have inherited the static peer ID: ${staticPeerID}`);
+          displayMessage(`You are now the owner of static peer ID: ${staticPeerID}`);
+
+          // Handle incoming connections as the new "static peer"
+          peer.on('connection', (conn) => {
+            console.log("New peer connected to you.");
+            displayMessage("New peer connected to you.");
+            connections.push(conn);
+            setupConnection(conn);
+          });
+        });
+
+        peer.on('error', (err) => {
+          if (err.type === 'unavailable-id') {
+            console.error(`Error: The static peer ID ${staticPeerID} is already taken by another peer.`);
+            displayMessage(`Error: ID ${staticPeerID} is already taken by another peer.`);
+          } else {
+            console.error(`PeerJS error:`, err);
+          }
+        });
+      } catch (error) {
+        console.error(`Failed to inherit static peer ID: ${error.message}`);
+        displayMessage(`Failed to inherit static peer ID: ${error.message}`);
+      }
     }
 
-    // Function to set up data exchange and messaging
+    // Setup data and messaging between peers
     function setupConnection(conn) {
+      console.log("Setting up connection with peer:", conn.peer);
+
       conn.on('data', (data) => {
+        console.log(`Received message from peer ${conn.peer}: ${data}`);
         displayMessage(`Peer: ${data}`);
       });
 
       conn.on('close', () => {
+        console.log(`Peer ${conn.peer} has disconnected.`);
         displayMessage("A peer has disconnected.");
       });
     }
@@ -74,16 +100,23 @@
       if (event.key === 'Enter') {
         const message = messageInput.value;
         messageInput.value = '';
-        connections.forEach(conn => conn.send(message));
+        connections.forEach(conn => {
+          console.log(`Sending message to peer ${conn.peer}: ${message}`);
+          conn.send(message);
+        });
         displayMessage(`You: ${message}`);
       }
     });
 
-    // Start the process: Attempt to connect to the static peer ID
+    // Start by attempting to connect to the static peer ID when peer is open
     peer.on('open', () => {
-      attemptConnectionToStaticID();  // Try connecting to the static peer ID when the peer is open
+      console.log(`Your peer ID: ${peer.id}`);
+      attemptConnectionToStaticID();
     });
 
+    peer.on('error', (err) => {
+      console.error("PeerJS error:", err);
+    });
   </script>
 </body>
 </html>
