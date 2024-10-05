@@ -29,23 +29,30 @@
       messagesDiv.appendChild(messageElement);
     }
 
-    // Attempt to connect to the static peer ID
-    function attemptConnectionToStaticID() {
-      console.log(`Attempting to connect to static peer ID: ${staticPeerID}`);
-      const conn = peer.connect(staticPeerID);
+function attemptConnectionToStaticID(retryCount = 0) {
+  const maxRetries = 5; // Define a limit to retry attempts
+  console.log(`Attempting to connect to static peer ID: ${staticPeerID}`);
+  const conn = peer.connect(staticPeerID);
 
-      conn.on('open', () => {
-        console.log(`Successfully connected to static peer ID: ${staticPeerID}`);
-        displayMessage("Connected to static peer ID.");
-        connections.push(conn);
-        setupConnection(conn);
-      });
+  conn.on('open', () => {
+    console.log(`Successfully connected to static peer ID: ${staticPeerID}`);
+    displayMessage("Connected to static peer ID.");
+    connections.push(conn);
+    setupConnection(conn);
+  });
 
-      conn.on('error', (err) => {
-        console.error(`Failed to connect to static peer ID: ${staticPeerID}. Error:`, err);
-        inheritStaticPeerID();
-      });
+  conn.on('error', (err) => {
+    console.error(`Failed to connect to static peer ID: ${staticPeerID}. Error:`, err);
+    
+    if (retryCount < maxRetries) {
+      console.log(`Retrying connection... (${retryCount + 1}/${maxRetries})`);
+      setTimeout(() => attemptConnectionToStaticID(retryCount + 1), 2000); // Retry after 2 seconds
+    } else {
+      console.log("Max retries reached, inheriting the static peer ID.");
+      inheritStaticPeerID();
     }
+  });
+}
 
     // Inherit the static peer ID if the connection fails
     function inheritStaticPeerID() {
