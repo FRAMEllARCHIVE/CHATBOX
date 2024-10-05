@@ -22,24 +22,6 @@
     const messagesDiv = document.getElementById('messages');
     const messageInput = document.getElementById('messageInput');
 
-    // Show our peer ID for debugging purposes
-    peer.on('open', (id) => {
-      console.log('My peer ID is: ' + id);
-    });
-
-    // Auto-connect to other peers in the room
-    peer.on('connection', (conn) => {
-      connections.push(conn);
-
-      conn.on('data', (data) => {
-        displayMessage(`Peer: ${data}`);
-      });
-
-      conn.on('open', () => {
-        displayMessage('New peer connected.');
-      });
-    });
-
     // Function to display messages
     function displayMessage(msg) {
       const messageElement = document.createElement('div');
@@ -47,29 +29,64 @@
       messagesDiv.appendChild(messageElement);
     }
 
-    // Automatically connect to a specific peer or use logic to connect to other peers dynamically
+    // Create a unique URL with the peer ID
+    function createRoomURL(peerId) {
+      const roomURL = `${window.location.origin}?peer=${peerId}`;
+      displayMessage(`Share this link to join the chat: ${roomURL}`);
+    }
+
+    // When peer connection is opened
+    peer.on('open', (id) => {
+      console.log('My peer ID is: ' + id);
+      const urlParams = new URLSearchParams(window.location.search);
+      const otherPeerId = urlParams.get('peer');
+
+      // If we have a peer ID in the URL, connect to that peer
+      if (otherPeerId) {
+        connectToPeer(otherPeerId);
+      } else {
+        // If no peer is found, generate and share a new room link
+        createRoomURL(id);
+      }
+    });
+
+    // Connect to an existing peer
     function connectToPeer(peerId) {
       const conn = peer.connect(peerId);
       connections.push(conn);
 
       conn.on('open', () => {
         displayMessage('Connected to a peer.');
+
+        // Send your peer ID so others can connect to you too
+        conn.send(peer.id);
       });
 
       conn.on('data', (data) => {
-        displayMessage(`Peer: ${data}`);
+        if (data !== peer.id) {
+          displayMessage(`Peer: ${data}`);
+        }
       });
     }
 
-    // Auto-find peers to connect to
-    peer.on('open', () => {
-      const urlParams = new URLSearchParams(window.location.search);
-      const otherPeerId = urlParams.get('peer');
-      
-      // You could implement logic to auto-find peers via signaling or predefined ID patterns
-      if (otherPeerId) {
-        connectToPeer(otherPeerId);
-      }
+    // Handle incoming connections
+    peer.on('connection', (conn) => {
+      connections.push(conn);
+
+      conn.on('data', (data) => {
+        if (data !== peer.id) {
+          displayMessage(`Peer: ${data}`);
+
+          // Automatically connect to any new peers shared by others
+          if (data !== peer.id && !connections.some(c => c.peer === data)) {
+            connectToPeer(data);
+          }
+        }
+      });
+
+      conn.on('open', () => {
+        displayMessage('New peer connected.');
+      });
     });
 
     // Send messages to all peers when the user types
