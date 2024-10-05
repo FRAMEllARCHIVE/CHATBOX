@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PeerJS Chatroom</title>
+  <title>Dynamic PeerJS Chatroom</title>
   <style>
     body { font-family: Arial, sans-serif; padding: 20px; }
     #messages { height: 300px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
@@ -17,8 +17,9 @@
 
   <script src="https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js"></script>
   <script>
-    const peer = new Peer();  // Automatically generates a unique ID
-    const connections = [];
+    const staticPeerID = "static-chatroom-peer";  // Set Peer ID that new users attempt to connect to
+    let peer = new Peer();  // Create a new peer with a random ID initially
+    let connections = [];
     const messagesDiv = document.getElementById('messages');
     const messageInput = document.getElementById('messageInput');
 
@@ -29,67 +30,46 @@
       messagesDiv.appendChild(messageElement);
     }
 
-    // Create a unique URL with the peer ID
-    function createRoomURL(peerId) {
-      const roomURL = `${window.location.origin}?peer=${peerId}`;
-      displayMessage(`Share this link to join the chat: ${roomURL}`);
-    }
-
-    // When peer connection is opened
-    peer.on('open', (id) => {
-      console.log('My peer ID is: ' + id);
-      const urlParams = new URLSearchParams(window.location.search);
-      const otherPeerId = urlParams.get('peer');
-
-      // If we have a peer ID in the URL, connect to that peer
-      if (otherPeerId) {
-        connectToPeer(otherPeerId);
-      } else {
-        // If no peer is found, generate and share a new room link
-        createRoomURL(id);
-      }
-    });
-
-    // Connect to an existing peer
-    function connectToPeer(peerId) {
-      const conn = peer.connect(peerId);
-      connections.push(conn);
-
+    // Attempt to connect to the set peer ID
+    function attemptConnectionToStaticID() {
+      const conn = peer.connect(staticPeerID);
       conn.on('open', () => {
-        displayMessage('Connected to a peer.');
-
-        // Send your peer ID so others can connect to you too
-        conn.send(peer.id);
+        displayMessage("Connected to static peer ID.");
+        connections.push(conn);
+        setupConnection(conn);
       });
 
-      conn.on('data', (data) => {
-        if (data !== peer.id) {
-          displayMessage(`Peer: ${data}`);
-        }
+      conn.on('error', () => {
+        // If connection fails, inherit the static peer ID
+        inheritStaticPeerID();
       });
     }
 
-    // Handle incoming connections
-    peer.on('connection', (conn) => {
-      connections.push(conn);
+    // If connection to the static peer ID fails, inherit it
+    function inheritStaticPeerID() {
+      peer = new Peer(staticPeerID);  // Assume the static peer ID
+      displayMessage(`You are now the owner of static peer ID: ${staticPeerID}`);
 
+      // Handle incoming connections as the new "static peer"
+      peer.on('connection', (conn) => {
+        displayMessage("New peer connected to you.");
+        connections.push(conn);
+        setupConnection(conn);
+      });
+    }
+
+    // Function to set up data exchange and messaging
+    function setupConnection(conn) {
       conn.on('data', (data) => {
-        if (data !== peer.id) {
-          displayMessage(`Peer: ${data}`);
-
-          // Automatically connect to any new peers shared by others
-          if (data !== peer.id && !connections.some(c => c.peer === data)) {
-            connectToPeer(data);
-          }
-        }
+        displayMessage(`Peer: ${data}`);
       });
 
-      conn.on('open', () => {
-        displayMessage('New peer connected.');
+      conn.on('close', () => {
+        displayMessage("A peer has disconnected.");
       });
-    });
+    }
 
-    // Send messages to all peers when the user types
+    // Send messages to all connected peers
     messageInput.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') {
         const message = messageInput.value;
@@ -97,6 +77,11 @@
         connections.forEach(conn => conn.send(message));
         displayMessage(`You: ${message}`);
       }
+    });
+
+    // Start the process: Attempt to connect to the static peer ID
+    peer.on('open', () => {
+      attemptConnectionToStaticID();  // Try connecting to the static peer ID when the peer is open
     });
 
   </script>
